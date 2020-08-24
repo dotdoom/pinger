@@ -3,6 +3,7 @@
 #include <ping.h>
 #include <stdint.h>
 #include <SPI.h>
+#include <limits>
 
 // #incldue <Esp.h> EspClass.deepSleep
 
@@ -41,21 +42,28 @@ void setup()
     {
         ;
     }
+    Serial.println("Booting.");
 
     WiFi.hostname("pinger");
     WiFi.setAutoReconnect(true);
-    WiFi.persistent(false);
-    // Max Power.
-    WiFi.setOutputPower(20.5);
+    WiFi.persistent(true);
+    WiFi.setOutputPower(std::numeric_limits<float>::max());
     WiFi.setSleepMode(WIFI_NONE_SLEEP);
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    while (WiFi.status() != WL_CONNECTED)
+    int retries = 0;
+    while (WiFi.waitForConnectResult() != WL_CONNECTED)
     {
-        Serial.printf("Connecting (my MAC: %s)...\n",
-                      WiFi.macAddress().c_str());
-        delay(1000);
+        if (++retries > 3)
+        {
+            Serial.println("Retry limit reached, resetting device");
+            delay(1000);
+            ESP.reset();
+        }
+        Serial.printf("Reconnecting (retry %d)...\n", retries);
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     }
+    Serial.printf("Connected after %lu ms. Channel %d, my MAC %s\n", millis(),
+                  WiFi.channel(), WiFi.macAddress().c_str());
 
     IPAddress host;
     if (!WiFi.hostByName("google.com", host))
@@ -64,7 +72,6 @@ void setup()
         return;
     }
 
-    digitalWrite(LED_BUILTIN, LOW);
     Serial.printf("Host resolved to: %s\n", host.toString().c_str());
 
     ping_option *options = new ping_option();
